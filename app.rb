@@ -22,6 +22,15 @@ sql = <<-SCHEMA
     code CHAR(6) NOT NULL UNIQUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS accesses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    link_id INTEGER NOT NULL,
+    referrer_url VARCHAR(255),
+    user_agent VARCHAR(255),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (link_id) REFERENCES links(id)
+  );
 SCHEMA
 
 statements = sql.split(/;$/).map(&:strip).reject(&:blank?)
@@ -29,8 +38,7 @@ statements.each {|s| ActiveRecord::Base.connection.execute(s) }
 
 class App < Sinatra::Base
   post "/short_link" do
-    pass unless request.content_type == "application/json"
-    headers "Content-Type" => "application/json"
+    require_json
 
     data = JSON.parse(request.body.read) rescue {}
     shortener = Shortener.new(data)
@@ -44,10 +52,29 @@ class App < Sinatra::Base
 
   get %r{/(\w{6})} do |code|
     link = Link.find_by(code: code) || halt(404)
+
+    link.accesses.create({
+      referrer_url: request.referrer,
+      user_agent:   request.user_agent
+    })
+
     [301, {"Location" => link.url}, "301 Moved Permanently\n"]
   end
 
+  get %r{/(\w{6})\+} do |code|
+    require_json
+
+    link = Link.find_by(code: code) || halt(404)
+
+    [200, AccessesSerializer.new(link.accesses).to_json]
+  end
+
   private
+
+  def require_json
+    halt(404) unless request.content_type == "application/json"
+    headers "Content-Type" => "application/json"
+  end
 
   def base_uri
     URI("#{request.scheme}://#{request.host_with_port}")
@@ -64,6 +91,8 @@ class UrlValidator < ActiveModel::EachValidator
 end
 
 class Link < ActiveRecord::Base
+  has_many :accesses
+
   validates :url, presence: true, length: {maximum: 2000}
   validates :url, url: true, unless: :url_errors?
   validates :code, uniqueness: true
@@ -95,6 +124,12 @@ class Link < ActiveRecord::Base
       errors.add(:url, "must be unique")
     end
   end
+end
+
+class Access < ActiveRecord::Base
+  belongs_to :link
+
+  default_scope { order(created_at: :desc) }
 end
 
 class Shortener
@@ -165,6 +200,36 @@ class LinkSerializer
 
   def short_link
     @base_uri.tap {|u| u.path = "/#{@object.code}" }
+  end
+end
+
+class AccessesSerializer
+  def initialize(accesses)
+    @accesses = accesses
+  end
+
+  def as_json(*opts)
+    {response: accesses}
+  end
+
+  private
+
+  def accesses
+    @accesses.map {|a| AccessSerializer.new(a) }
+  end
+end
+
+class AccessSerializer
+  def initialize(access)
+    @access = access
+  end
+
+  def as_json(*opts)
+    {
+      time:       @access.created_at,
+      referrer:   @access.referrer_url.presence || "none",
+      user_agent: @access.user_agent.presence || "none"
+    }
   end
 end
 

@@ -30,6 +30,8 @@ The following features have been implemented:
   an error to the user
 * Requesting a shortcode URL (regardless of `Content-Type`) header will redirect
   the user to the source URL
+* Accesses to the short URL are tracked and a report is available by requesting
+  the shortcode URL with a `+` appended to it
 
 ## Examples
 
@@ -87,6 +89,35 @@ Server: thin
 
 301 Moved Permanently
 ```
+
+Fetching an access report for a shortcode:
+
+```
+curl -s \
+  -H "Content-Type: application/json" \
+  "http://localhost:9292/byDkfX+" | python -m json.tool
+
+{
+    "response": [
+        {
+            "referrer": "http://localhost:9292/",
+            "time": "2019-09-20T21:06:24.375Z",
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:69.0) Gecko/20100101 Firefox/69.0"
+        },
+        {
+            "referrer": "none",
+            "time": "2019-09-20T21:03:19.013Z",
+            "user_agent": "curl/7.54.0"
+        },
+        {
+            "referrer": "none",
+            "time": "2019-09-20T21:03:17.726Z",
+            "user_agent": "curl/7.54.0"
+        }
+    ]
+}
+```
+
 
 ## Running Tests
 

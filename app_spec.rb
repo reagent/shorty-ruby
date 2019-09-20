@@ -195,6 +195,55 @@ RSpec.describe LinkSerializer do
   end
 end
 
+RSpec.describe AccessSerializer do
+  describe "#as_json" do
+    let(:link) { Link.create!(url: "http://example.test", code: "OMGHIU") }
+
+    it "returns a full representation of an access" do
+      access = link.accesses.create!({
+        referrer_url: "http://example.referer",
+        user_agent:   "RSpec"
+      })
+
+      subject = described_class.new(access)
+
+      json = subject.as_json
+
+      expect(json).to include(:time, :referrer, :user_agent)
+
+      expect(json[:time]).to       be_kind_of(Time)
+      expect(json[:referrer]).to   eq("http://example.referer")
+      expect(json[:user_agent]).to eq("RSpec")
+    end
+
+    it "handles missing values" do
+      access = link.accesses.create!
+
+      subject = described_class.new(access)
+      expect(subject.as_json).to include({
+        referrer: "none", user_agent: "none"
+      })
+    end
+  end
+end
+
+RSpec.describe AccessesSerializer do
+  describe "#to_json" do
+    it "returns a representation of all accesses" do
+      link = Link.create!(url: "http://example.test", code: "OMGHIU")
+      2.times { link.accesses.create! }
+
+      subject = described_class.new(link.accesses)
+
+      json = JSON.parse(subject.to_json)
+
+      expect(json).to have_key("response")
+      expect(json["response"].length).to eq(2)
+      expect(json["response"].first).to include("time", "referrer", "user_agent")
+    end
+  end
+end
+
 RSpec.describe ErrorsSerializer do
   describe "#as_json" do
     let(:errors) { ActiveModel::Errors.new(double) }
@@ -330,6 +379,11 @@ describe "API" do
     super(path, payload)
   end
 
+  def get(path, as: nil)
+    header("Content-Type", as) if as.present?
+    super(path)
+  end
+
   def parsed_body
     JSON.parse(last_response.body)
   end
@@ -411,13 +465,79 @@ describe "API" do
       expect(last_response.status).to eq(404)
     end
 
-    it "permanently redirects when the code is found" do
-      Link.create!(url: "http://example.test", code: "OMGHIU")
+    context "with an existing short link" do
+      let(:url)   { "http://example.test" }
+      let(:code)  { "OMGHIU" }
+      let!(:link) { Link.create!(url: url, code: code) }
 
-      get "/OMGHIU"
+      it "permanently redirects when the code is found" do
+        get "/#{code}"
 
-      expect(last_response.status).to eq(301)
-      expect(last_response.headers["Location"]).to eq("http://example.test")
+        expect(last_response.status).to eq(301)
+        expect(last_response.headers["Location"]).to eq(url)
+      end
+
+      it "records that the URL has been accessed" do
+        expect { get "/#{code}" }.to change { link.accesses.count }.by(1)
+
+        expect(link.accesses.last.referrer_url).to be_blank
+        expect(link.accesses.last.user_agent).to be_blank
+      end
+
+      it "records the referrer and user agent for the access" do
+        header "User-Agent", "Rack::Test"
+        header "Referer", "http://example.referer"
+
+        get "/#{code}"
+
+        access = link.accesses.last
+
+        expect(access.referrer_url).to eq("http://example.referer")
+        expect(access.user_agent).to eq("Rack::Test")
+      end
     end
   end
+
+  describe "GET /<code>+" do
+    it "returns a 404 when the content-type is not specified" do
+      get "/ABCDEF+"
+      expect(last_response.status).to eq(404)
+    end
+
+    it "returns a 404 when the link is not found" do
+      get "/ABCDEF+", as: "application/json"
+      expect(last_response.status).to eq(404)
+    end
+
+    context "with an existing link" do
+      let(:code) { "ABCDEF" }
+      let!(:link) { Link.create!(url: "http://example.test", code: code) }
+
+      it "returns an empty response if the link has not been accessed" do
+        get "/#{code}+", as: "application/json"
+
+        expect(last_response).to be_ok
+        expect(parsed_body).to eq({"response" => []})
+      end
+
+      it "returns the access data" do
+        link.accesses.create!(referrer_url: "http://example.referer")
+        link.accesses.create!(user_agent: "Rack::Test")
+
+        get "/#{code}+", as: "application/json"
+
+        expect(last_response).to be_ok
+        expect(parsed_body["response"].first).to include({
+          "referrer"   => "none",
+          "user_agent" => "Rack::Test"
+        })
+
+        expect(parsed_body["response"].last).to include({
+          "referrer"   => "http://example.referer",
+          "user_agent" => "none"
+        })
+      end
+    end
+  end
+
 end
