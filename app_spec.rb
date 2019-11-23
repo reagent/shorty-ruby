@@ -393,7 +393,7 @@ describe "API" do
       get "/"
 
       expect(last_response.status).to eq(200)
-      expect(last_response.body).to include(%{<h1 id="url-shortener">URL Shortener</h1>})
+      expect(last_response.body).to include(%{<h1>URL Shortener</h1>})
     end
   end
 

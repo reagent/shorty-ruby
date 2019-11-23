@@ -5,6 +5,7 @@ Bundler.setup(:default, ENV["APP_ENV"])
 
 require "sinatra"
 require "pathname"
+require "commonmarker"
 require "active_record"
 require "rack/utils"
 require "active_support/core_ext/hash"
@@ -62,13 +63,9 @@ statements = sql.split(/;$/).map(&:strip).reject(&:blank?)
 statements.each {|s| ActiveRecord::Base.connection.execute(s) }
 
 class App < Sinatra::Base
-  configure do
-    set :markdown, layout_engine: :erb
-    set :markdown, layout_options: {views: settings.root}
-  end
-
   get "/" do
-    markdown File.read("README.md"), layout: true
+    body = CommonMarker.render_html(File.read("README.md"))
+    erb body, layout: true, layout_options: {views: settings.root}
   end
 
   post "/short_link" do

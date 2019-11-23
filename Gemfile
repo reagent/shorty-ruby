@@ -4,7 +4,7 @@ source "https://rubygems.org"
 gem "sinatra"
 gem "activerecord"
 gem "thin"
-gem "pandoc-ruby"
+gem "commonmarker"
 
 group :development do
   gem "sqlite3"
