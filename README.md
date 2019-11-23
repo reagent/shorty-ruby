@@ -1,4 +1,4 @@
-# URL Shortener
+# Shorty: A URL Shortener
 
 A simple URL shortener that will create a unique shortcode for a URL. Making a
 request for the shortcode will redirect a user to the desired target URL.
