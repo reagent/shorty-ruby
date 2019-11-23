@@ -62,6 +62,15 @@ statements = sql.split(/;$/).map(&:strip).reject(&:blank?)
 statements.each {|s| ActiveRecord::Base.connection.execute(s) }
 
 class App < Sinatra::Base
+  configure do
+    set :markdown, layout_engine: :erb
+    set :markdown, layout_options: {views: settings.root}
+  end
+
+  get "/" do
+    markdown File.read("README.md"), layout: true
+  end
+
   post "/short_link" do
     require_json
 

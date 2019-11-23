@@ -388,6 +388,15 @@ describe "API" do
     JSON.parse(last_response.body)
   end
 
+  describe "GET /" do
+    it "renders an ERB page" do
+      get "/"
+
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to include(%{<h1 id="url-shortener">URL Shortener</h1>})
+    end
+  end
+
   describe "POST /short_link" do
     it "returns a 404 when the content-type is not specified" do
       post "/short_link"
