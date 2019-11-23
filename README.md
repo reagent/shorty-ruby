@@ -3,11 +3,19 @@
 A simple URL shortener that will create a unique shortcode for a URL. Making a
 request for the shortcode will redirect a user to the desired target URL.
 
+You can try it out for yourself:
+
+```
+curl -s -H "Content-Type: application/json" \
+  -d '{"long_url":"https://github.com/reagent"}' \
+  "http://shorty-ruby.herokuapp.com/short_link" | python -m json.tool
+```
+
 ## Installation
 
 ```
-git clone git@gist.github.com:3f489f3a153b7090380d0cd235cf6700.git ls
-cd ls && bundle
+git clone git@github.com:reagent/shorty-ruby.git
+cd shorty-ruby && bundle
 ```
 
 You can run the server via rackup and it will listen on port 9292:
