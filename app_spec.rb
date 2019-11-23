@@ -2,7 +2,7 @@ ENV["APP_ENV"] ||= "test"
 
 require "bundler"
 
-Bundler.setup(:default, :test)
+Bundler.setup(:default, ENV["APP_ENV"])
 
 require "rspec"
 require "rack/test"

@@ -1,6 +1,8 @@
 ENV["APP_ENV"] ||= "development"
 
-require "bundler/setup"
+require "bundler"
+Bundler.setup(:default, ENV["APP_ENV"])
+
 require "sinatra"
 require "pathname"
 require "active_record"
@@ -9,29 +11,52 @@ require "active_support/core_ext/hash"
 
 root = Pathname.new(__FILE__).join("..").expand_path
 
-ActiveRecord::Base.establish_connection({
-  adapter:  "sqlite3",
-  database: root.join(%{#{ENV["APP_ENV"]}.sqlite3})
-})
+if ENV["APP_ENV"] == "production"
+  ActiveRecord::Base.establish_connection(ENV["DATABASE_URL"])
 
-sql = <<-SCHEMA
-  CREATE TABLE IF NOT EXISTS links (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    url VARCHAR(2000) NOT NULL,
-    url_hash CHAR(32) NOT NULL UNIQUE,
-    code CHAR(6) NOT NULL UNIQUE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
+  sql = <<-SCHEMA
+    CREATE TABLE IF NOT EXISTS links (
+      id SERIAL PRIMARY KEY NOT NULL,
+      url VARCHAR(2000) NOT NULL,
+      url_hash CHAR(32) NOT NULL UNIQUE,
+      code CHAR(6) NOT NULL UNIQUE,
+      created_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+    );
 
-  CREATE TABLE IF NOT EXISTS accesses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    link_id INTEGER NOT NULL,
-    referrer_url VARCHAR(255),
-    user_agent VARCHAR(255),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (link_id) REFERENCES links(id)
-  );
-SCHEMA
+    CREATE TABLE IF NOT EXISTS accesses (
+      id SERIAL PRIMARY KEY NOT NULL,
+      link_id INTEGER NOT NULL,
+      referrer_url VARCHAR(255),
+      user_agent VARCHAR(255),
+      created_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+      FOREIGN KEY (link_id) REFERENCES links(id) ON DELETE RESTRICT
+    );
+  SCHEMA
+else
+  ActiveRecord::Base.establish_connection({
+    adapter:  "sqlite3",
+    database: root.join(%{#{ENV["APP_ENV"]}.sqlite3})
+  })
+
+  sql = <<-SCHEMA
+    CREATE TABLE IF NOT EXISTS links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      url VARCHAR(2000) NOT NULL,
+      url_hash CHAR(32) NOT NULL UNIQUE,
+      code CHAR(6) NOT NULL UNIQUE,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS accesses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      link_id INTEGER NOT NULL,
+      referrer_url VARCHAR(255),
+      user_agent VARCHAR(255),
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (link_id) REFERENCES links(id)
+    );
+  SCHEMA
+end
 
 statements = sql.split(/;$/).map(&:strip).reject(&:blank?)
 statements.each {|s| ActiveRecord::Base.connection.execute(s) }
